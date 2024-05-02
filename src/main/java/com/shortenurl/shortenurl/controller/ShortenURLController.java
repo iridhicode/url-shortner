@@ -1,6 +1,8 @@
 package com.shortenurl.shortenurl.controller;
 
-import java.net.URL;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,33 +19,42 @@ import com.shortenurl.shortenurl.repo.ShortenURLRepo;
 
 @Controller
 public class ShortenURLController {
+	
 
 	@Autowired
 	ShortenURLRepo shortenURLRepo;
 
 	@PostMapping("/generateURL")
-	public String generateURL(@RequestParam("longURL") String longURL) {
-
-		String newUrl = shortenURL(longURL);
+	public ResponseEntity<String> generateURL(@RequestParam("longurl") String longURL) {
+		
+		String sanitizedUrl = URLEncoder.encode(longURL, StandardCharsets.UTF_8);
+		String newUrl = shortenURL(sanitizedUrl);
+		System.out.println("Shortened URL: " + newUrl + " for the long URL :" + longURL );
 		if (null != newUrl) {
 			UrlMappingEntity mappingEntity = new UrlMappingEntity();
-			mappingEntity.setLongUrl(longURL);
+			mappingEntity.setLongUrl(sanitizedUrl);
 			mappingEntity.setShortUrl(newUrl);
 			shortenURLRepo.save(mappingEntity);
-			return newUrl;
+			return   ResponseEntity.ok("Short URL: " + newUrl);
 		}
-		return "Invalid URL";
+		return ResponseEntity.notFound().build();
 
 	}
 
 	@GetMapping("/{shortUrl}")
 	public ResponseEntity<Void> redirectToLongUrl(@PathVariable String shortUrl) {
-		UrlMappingEntity url = shortenURLRepo.findByShortUrl(shortUrl);
-		if (url != null) {
-			return ResponseEntity.status(HttpStatus.FOUND).header("Location", url.getLongUrl()).build();
-		} else {
-			return ResponseEntity.notFound().build();
-		}
+	    UrlMappingEntity url = shortenURLRepo.findByShortUrl(shortUrl);
+	    if (url != null) {
+	        String longUrl = url.getLongUrl();
+	        if (!longUrl.startsWith("http://") && !longUrl.startsWith("https://")) {
+	            longUrl = "http://" + longUrl;
+	        }
+	        return ResponseEntity.status(HttpStatus.FOUND)
+	                .location(URI.create(longUrl))
+	                .build();
+	    } else {
+	        return ResponseEntity.notFound().build();
+	    }
 	}
 
 	public static String shortenURL(String url) {
